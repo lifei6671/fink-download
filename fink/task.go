@@ -2,10 +2,11 @@ package fink
 
 import (
 	"context"
+	"crypto/md5"
+	"encoding/hex"
 	"fmt"
 	"log"
 	"path/filepath"
-	"time"
 )
 
 var (
@@ -29,8 +30,8 @@ func Run(ctx context.Context, dir string) error {
 			if err != nil {
 				break
 			}
-			for i, imageUrl := range imageUrls {
-				filename := filepath.Join(dir, "finkapp", fmt.Sprintf("fink-%d-%d.jpg", time.Now().UnixNano(), i))
+			for _, imageUrl := range imageUrls {
+				filename := filepath.Join(dir, "finkapp", fmt.Sprintf("fink-%s.jpg", createFileName(imageUrl)))
 				err = finker.SaveFile(ctx, imageUrl, filename)
 				if err != nil {
 					log.Printf("保存图片失败: %s - %+v", filename, err)
@@ -42,4 +43,10 @@ func Run(ctx context.Context, dir string) error {
 			return nil
 		}
 	}
+}
+
+func createFileName(urlStr string) string {
+	h := md5.New()
+	h.Write([]byte(urlStr))
+	return hex.EncodeToString(h.Sum(nil))
 }
