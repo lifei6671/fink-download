@@ -2,7 +2,6 @@ package fink
 
 import (
 	"context"
-	"errors"
 	"github.com/lifei6671/fink-download/internal/utils"
 	"io"
 	"log"
@@ -25,7 +24,7 @@ var (
 )
 
 type Downloader interface {
-	Parser(ctx context.Context, urlStr string) (string, error)
+	Parser(ctx context.Context, urlStr string) ([]string, error)
 	SaveFile(ctx context.Context, urlStr string, filename string) error
 }
 
@@ -59,11 +58,11 @@ func NewFinkDownload() Downloader {
 	}
 }
 
-func (d *downloadFink) Parser(ctx context.Context, urlStr string) (string, error) {
+func (d *downloadFink) Parser(ctx context.Context, urlStr string) ([]string, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, urlStr, nil)
 	if err != nil {
 		log.Printf("创建请求失败: url[%s] errmsg[%+v]", urlStr, err)
-		return "", err
+		return nil, err
 	}
 	req.Header.Set("User-Agent", DefaultUserAgent)
 	req.Header.Set("Referer", urlStr)
@@ -71,32 +70,37 @@ func (d *downloadFink) Parser(ctx context.Context, urlStr string) (string, error
 	resp, err := d.c.Do(req)
 	if err != nil {
 		log.Printf("请求失败: url[%s] errmsg[%+v]", urlStr, err)
-		return "", err
+		return nil, err
 	}
 	defer utils.SafeClose(resp.Body)
 
 	doc, err := goquery.NewDocumentFromReader(resp.Body)
 	if err != nil {
 		log.Printf("解析返回值失败: url[%s] errmsg[%+v]", urlStr, err)
-		return "", err
+		return nil, err
 	}
-	val, exist := doc.Find(".live-video .swiper-slide").First().Attr("style")
-	if !exist {
-		log.Printf("解析图片失败,属性不存在: url[%s]", urlStr)
-		return "", err
-	}
-	imageStr := strings.TrimSuffix(d.exp.FindString(val), ")")
-	if imageStr == "" {
-		log.Printf("正则匹配图片失败: url[%s] value[%s]", urlStr, val)
-		return "", errors.New("正则匹配图片失败：" + val)
-	}
-	uri, err := url.ParseRequestURI(imageStr)
-	if err != nil {
-		log.Printf("解析图片地址失败: url[%s]", urlStr)
-		return "", err
-	}
-	uri.RawQuery = ""
-	return uri.String(), nil
+	var urls []string
+	doc.Find(".live-video .swiper-slide").Each(func(i int, selection *goquery.Selection) {
+		val, exist := selection.Attr("style")
+		if !exist {
+			log.Printf("解析图片失败,属性不存在: url[%s]", urlStr)
+			return
+		}
+		imageStr := strings.TrimSuffix(d.exp.FindString(val), ")")
+		if imageStr == "" {
+			log.Printf("正则匹配图片失败: url[%s] value[%s]", urlStr, val)
+			return
+		}
+		uri, err := url.ParseRequestURI(imageStr)
+		if err != nil {
+			log.Printf("解析图片地址失败: url[%s]", urlStr)
+			return
+		}
+		uri.RawQuery = ""
+		urls = append(urls, uri.String())
+	})
+
+	return urls, nil
 }
 
 func (d *downloadFink) SaveFile(ctx context.Context, urlStr string, filename string) error {

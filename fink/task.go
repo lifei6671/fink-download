@@ -25,18 +25,19 @@ func Run(ctx context.Context, dir string) error {
 				log.Println("管道已关闭!")
 				return nil
 			}
-			imageStr, err := finker.Parser(ctx, urlStr)
+			imageUrls, err := finker.Parser(ctx, urlStr)
 			if err != nil {
 				break
 			}
-
-			filename := filepath.Join(dir, "finkapp", fmt.Sprintf("fink-%d.jpg", time.Now().UnixNano()))
-
-			err = finker.SaveFile(ctx, imageStr, filename)
-			if err != nil {
-				break
+			for i, imageUrl := range imageUrls {
+				filename := filepath.Join(dir, "finkapp", fmt.Sprintf("fink-%d-%d.jpg", time.Now().UnixNano(), i))
+				err = finker.SaveFile(ctx, imageUrl, filename)
+				if err != nil {
+					log.Printf("保存图片失败: %s - %+v", filename, err)
+					continue
+				}
+				log.Printf("保存图片成功: %s", filename)
 			}
-			log.Printf("保存图片成功: %s", filename)
 		case <-ctx.Done():
 			return nil
 		}
